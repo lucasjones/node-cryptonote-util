@@ -1,0 +1,20 @@
+{
+    "name": "cryptonote-util",
+    "version": "0.0.1",
+    "main": "cryptonote",
+    "author": {
+        "name": "LucasJones",
+        "email": "lucasjonesdev@hotmail.co.uk"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/LucasJones/node-cryptonote-util.git"
+    },
+    "dependencies" : {
+        "bindings" : "*"
+    },
+    "keywords": [
+        "cryptonight",
+        "cryptonote"
+    ]
+}
