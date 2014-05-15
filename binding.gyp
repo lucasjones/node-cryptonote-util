@@ -9,22 +9,21 @@
                 "src/crypto/hash.c",
                 "src/crypto/keccak.c"
             ],
-    		"include_dirs": [
-    			"src",
-    			"src/contrib/epee/include"
-    		],
-    		"link_settings": {
-    	    	"libraries": [
-    	    		"-lboost_system"
-    	    	]
-    	    },
-    		"cflags!": [ "-fno-exceptions", "-fno-rtti" ],
-			"cflags_cc!": [ "-fno-exceptions", "-fno-rtti", "-std=c++11", "-frtti" ],
-    		"cflags": [
-  				"-std=c++11",
-  				"-fexceptions",
-  				"-frtti"
-			]
+            "include_dirs": [
+                "src",
+                "src/contrib/epee/include"
+            ],
+            "link_settings": {
+                "libraries": [
+                    "-lboost_system"
+                ]
+            },
+            "cflags_cc!": [ "-fno-exceptions", "-fno-rtti" ],
+            "cflags_cc": [
+                  "-std=c++11",
+                  "-fexceptions",
+                  "-frtti"
+            ]
         }
     ]
 }
