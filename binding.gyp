@@ -20,7 +20,7 @@
             },
             "cflags_cc!": [ "-fno-exceptions", "-fno-rtti" ],
             "cflags_cc": [
-                  "-std=c++11",
+                  "-std=c++0x",
                   "-fexceptions",
                   "-frtti"
             ]
