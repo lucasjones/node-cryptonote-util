@@ -15,7 +15,8 @@
             ],
             "link_settings": {
                 "libraries": [
-                    "-lboost_system"
+                    "-lboost_system",
+                    "-lboost_date_time"
                 ]
             },
             "cflags_cc!": [ "-fno-exceptions", "-fno-rtti" ],
