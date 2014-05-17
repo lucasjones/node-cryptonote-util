@@ -19,6 +19,19 @@ Handle<Value> except(const char* msg) {
     return ThrowException(Exception::Error(String::New(msg)));
 }
 
+blobdata uint64be_to_blob(uint64_t num) {
+    blobdata res = "        ";
+    res[0] = num >> 56 & 0xff;
+    res[1] = num >> 48 & 0xff;
+    res[2] = num >> 40 & 0xff;
+    res[3] = num >> 32 & 0xff;
+    res[4] = num >> 24 & 0xff;
+    res[5] = num >> 16 & 0xff;
+    res[6] = num >> 8  & 0xff;
+    res[7] = num       & 0xff;
+    return res;
+}
+
 Handle<Value> convert_blob(const Arguments& args) {
     HandleScope scope;
 
@@ -64,6 +77,8 @@ Handle<Value> address_decode(const Arguments& args) {
     uint64_t prefix;
 
     tools::base58::decode_addr(input, prefix, output);
+
+    output = uint64be_to_blob(prefix) + output;
 
     Buffer* buff = Buffer::New(output.data(), output.size());
     return scope.Close(buff->handle_);
