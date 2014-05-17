@@ -7,7 +7,8 @@
                 "src/cryptonote_core/cryptonote_format_utils.cpp",
                 "src/crypto/tree-hash.c",
                 "src/crypto/hash.c",
-                "src/crypto/keccak.c"
+                "src/crypto/keccak.c",
+                "src/common/base58.cpp"
             ],
             "include_dirs": [
                 "src",
