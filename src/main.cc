@@ -77,8 +77,9 @@ Handle<Value> address_decode(const Arguments& args) {
     uint64_t prefix;
 
     tools::base58::decode_addr(input, prefix, output);
-
-    output = uint64be_to_blob(prefix) + output;
+    
+    if(output.length())
+        output = uint64be_to_blob(prefix) + output;
 
     Buffer* buff = Buffer::New(output.data(), output.size());
     return scope.Close(buff->handle_);
