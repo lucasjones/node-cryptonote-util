@@ -52,9 +52,31 @@ Handle<Value> convert_blob(const Arguments& args) {
         return except("Failed to parse block");
     }
     output = get_block_hashing_blob(b);
-//    crypto::hash tree_root_hash = get_tx_tree_hash(b);
-//    blob.append((const char*)&tree_root_hash, sizeof(tree_root_hash ));
-//    blob.append(tools::get_varint_data(b.tx_hashes.size()+1));
+
+    Buffer* buff = Buffer::New(output.data(), output.size());
+    return scope.Close(buff->handle_);
+}
+
+Handle<Value> convert_blob_bb(const Arguments& args) {
+    HandleScope scope;
+
+    if (args.Length() < 1)
+        return except("You must provide one argument.");
+
+    Local<Object> target = args[0]->ToObject();
+
+    if (!Buffer::HasInstance(target))
+        return except("Argument should be a buffer object.");
+
+    blobdata input = std::string(Buffer::Data(target), Buffer::Length(target));
+    blobdata output = "";
+
+    //convert
+    bb_block b = AUTO_VAL_INIT(b);
+    if (!parse_and_validate_block_from_blob(input, b)) {
+        return except("Failed to parse block");
+    }
+    output = get_block_hashing_blob(b);
 
     Buffer* buff = Buffer::New(output.data(), output.size());
     return scope.Close(buff->handle_);
@@ -87,6 +109,7 @@ Handle<Value> address_decode(const Arguments& args) {
 
 void init(Handle<Object> exports) {
     exports->Set(String::NewSymbol("convert_blob"), FunctionTemplate::New(convert_blob)->GetFunction());
+    exports->Set(String::NewSymbol("convert_blob_bb"), FunctionTemplate::New(convert_blob_bb)->GetFunction());
     exports->Set(String::NewSymbol("address_decode"), FunctionTemplate::New(address_decode)->GetFunction());
 }
 
