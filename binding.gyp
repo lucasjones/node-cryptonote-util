@@ -8,24 +8,24 @@
                 "src/crypto/tree-hash.c",
                 "src/crypto/hash.c",
                 "src/crypto/keccak.c",
-                "src/common/base58.cpp"
+                "src/common/base58.cpp",
             ],
             "include_dirs": [
                 "src",
-                "src/contrib/epee/include"
+                "src/contrib/epee/include",
             ],
             "link_settings": {
                 "libraries": [
                     "-lboost_system",
-                    "-lboost_date_time"
+                    "-lboost_date_time",
                 ]
             },
             "cflags_cc!": [ "-fno-exceptions", "-fno-rtti" ],
             "cflags_cc": [
                   "-std=c++0x",
                   "-fexceptions",
-                  "-frtti"
-            ]
+                  "-frtti",
+            ],
         }
     ]
 }
