@@ -590,7 +590,7 @@ namespace cryptonote
   bool get_transaction_hash(const bb_transaction& t, crypto::hash& res)
   {
     size_t blob_size = 0;
-    return get_object_hash(t, res, blob_size);
+    return get_object_hash(static_cast<const bb_transaction_prefix&>(t), res, blob_size);
   }
 
   //---------------------------------------------------------------
