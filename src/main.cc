@@ -110,6 +110,32 @@ Handle<Value> convert_blob(const Arguments& args) {
     return scope.Close(buff->handle_);
 }
 
+Handle<Value> get_block_id(const Arguments& args) {
+    HandleScope scope;
+
+    if (args.Length() < 1)
+        return except("You must provide one argument.");
+
+    Local<Object> target = args[0]->ToObject();
+
+    if (!Buffer::HasInstance(target))
+        return except("Argument should be a buffer object.");
+
+    blobdata input = std::string(Buffer::Data(target), Buffer::Length(target));
+    blobdata output = "";
+
+    block b = AUTO_VAL_INIT(b);
+    if (!parse_and_validate_block_from_blob(input, b))
+        return except("Failed to parse block");
+
+    crypto::hash block_id;
+    if (!get_block_hash(b, block_id))
+        return except("Failed to calculate hash for block");
+
+    Buffer* buff = Buffer::New(reinterpret_cast<char*>(&block_id), sizeof(block_id));
+    return scope.Close(buff->handle_);
+}
+
 Handle<Value> construct_block_blob(const Arguments& args) {
     HandleScope scope;
 
@@ -204,6 +230,7 @@ Handle<Value> address_decode(const Arguments& args) {
 
 void init(Handle<Object> exports) {
     exports->Set(String::NewSymbol("construct_block_blob"), FunctionTemplate::New(construct_block_blob)->GetFunction());
+    exports->Set(String::NewSymbol("get_block_id"), FunctionTemplate::New(get_block_id)->GetFunction());
     exports->Set(String::NewSymbol("convert_blob"), FunctionTemplate::New(convert_blob)->GetFunction());
     exports->Set(String::NewSymbol("convert_blob_bb"), FunctionTemplate::New(convert_blob_bb)->GetFunction());
     exports->Set(String::NewSymbol("address_decode"), FunctionTemplate::New(address_decode)->GetFunction());
