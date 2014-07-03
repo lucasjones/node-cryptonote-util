@@ -84,45 +84,38 @@ Handle<Value> convert_blob_bb(const Arguments& args) {
     return scope.Close(buff->handle_);
 }
 
-Handle<Value> check_address(const Arguments& args) {
+Handle<Value> address_decode(const Arguments& args) {
     HandleScope scope;
 
-    if (args.Length() < 2)
-        return except("You must provide two arguments.");
+    if (args.Length() < 1)
+        return except("You must provide one argument.");
 
     Local<Object> target = args[0]->ToObject();
 
     if (!Buffer::HasInstance(target))
-        return except("First argument should be a buffer object.");
-
-    if (!args[1]->IsNumber())
-        return except("Second argument should be an unsigned integer number.");
+        return except("Argument should be a buffer object.");
 
     blobdata input = std::string(Buffer::Data(target), Buffer::Length(target));
-    Local<Number> expected_prefix = Number::New(args[1]->NumberValue());
 
     blobdata data;
     uint64_t prefix;
     if (!tools::base58::decode_addr(input, prefix, data))
-        return scope.Close(Boolean::New(false));
-
-    if (static_cast<uint64_t>(llround(expected_prefix->NumberValue())) != prefix)
-        return scope.Close(Boolean::New(false));
+        return scope.Close(Undefined());
 
     account_public_address adr;
     if (!::serialization::parse_binary(data, adr))
-        return scope.Close(Boolean::New(false));
+        return scope.Close(Undefined());
 
-    //if (!crypto::check_key(adr.m_spend_public_key) || !crypto::check_key(adr.m_view_public_key))
-    //    return scope.Close(Boolean::New(false));
+    if (!crypto::check_key(adr.m_spend_public_key) || !crypto::check_key(adr.m_view_public_key))
+        return scope.Close(Undefined());
 
-    return scope.Close(Boolean::New(true));
+    return scope.Close(Integer::New(static_cast<uint32_t>(prefix)));
 }
 
 void init(Handle<Object> exports) {
     exports->Set(String::NewSymbol("convert_blob"), FunctionTemplate::New(convert_blob)->GetFunction());
     exports->Set(String::NewSymbol("convert_blob_bb"), FunctionTemplate::New(convert_blob_bb)->GetFunction());
-    exports->Set(String::NewSymbol("check_address"), FunctionTemplate::New(check_address)->GetFunction());
+    exports->Set(String::NewSymbol("address_decode"), FunctionTemplate::New(address_decode)->GetFunction());
 }
 
 NODE_MODULE(cryptonote, init)
