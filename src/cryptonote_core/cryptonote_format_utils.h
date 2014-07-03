@@ -5,6 +5,7 @@
 #pragma once
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
+#include "cryptonote_core/difficulty.h"
 #include "account.h"
 #include "include_base_utils.h"
 #include "crypto/crypto.h"
@@ -61,6 +62,8 @@ namespace cryptonote
   bool add_extra_nonce_to_tx_extra(std::vector<uint8_t>& tx_extra, const blobdata& extra_nonce);
   void set_payment_id_to_tx_extra_nonce(blobdata& extra_nonce, const crypto::hash& payment_id);
   bool get_payment_id_from_tx_extra_nonce(const blobdata& extra_nonce, crypto::hash& payment_id);
+  bool append_mm_tag_to_extra(std::vector<uint8_t>& tx_extra, const tx_extra_merge_mining_tag& mm_tag);
+  bool get_mm_tag_from_extra(const std::vector<uint8_t>& tx_extra, tx_extra_merge_mining_tag& mm_tag);
   bool is_out_to_acc(const account_keys& acc, const txout_to_key& out_key, const crypto::public_key& tx_pub_key, size_t output_index);
   bool lookup_acc_outs(const account_keys& acc, const transaction& tx, const crypto::public_key& tx_pub_key, std::vector<size_t>& outs, uint64_t& money_transfered);
   bool lookup_acc_outs(const account_keys& acc, const transaction& tx, std::vector<size_t>& outs, uint64_t& money_transfered);
@@ -74,20 +77,23 @@ namespace cryptonote
   crypto::hash get_transaction_hash(const transaction& t);
   bool get_transaction_hash(const transaction& t, crypto::hash& res);
   bool get_transaction_hash(const transaction& t, crypto::hash& res, size_t& blob_size);
-  blobdata get_block_hashing_blob(const block& b);
+  bool get_block_hashing_blob(const block& b, blobdata& blob);
+  bool get_bytecoin_block_hashing_blob(const block& b, blobdata& blob);
   blobdata get_block_hashing_blob(const bb_block& b);
   bool get_block_hash(const block& b, crypto::hash& res);
   crypto::hash get_block_hash(const block& b);
+  bool get_block_header_hash(const block& b, crypto::hash& res);
   bool get_block_longhash(const block& b, crypto::hash& res, uint64_t height);
   crypto::hash get_block_longhash(const block& b, uint64_t height);
+  bool get_bytecoin_block_longhash(const block& blk, crypto::hash& res);
   bool generate_genesis_block(block& bl);
+  bool get_genesis_block_hash(crypto::hash& h);
   bool parse_and_validate_block_from_blob(const blobdata& b_blob, block& b);
   bool parse_and_validate_block_from_blob(const blobdata& b_blob, bb_block& b);
   bool get_inputs_money_amount(const transaction& tx, uint64_t& money);
   uint64_t get_outs_money_amount(const transaction& tx);
   bool check_inputs_types_supported(const transaction& tx);
   bool check_outs_valid(const transaction& tx);
-  blobdata get_block_hashing_blob(const block& b);
   bool parse_amount(uint64_t& amount, const std::string& str_amount);
 
   bool check_money_overflow(const transaction& tx);
@@ -199,6 +205,10 @@ namespace cryptonote
   crypto::hash get_tx_tree_hash(const std::vector<crypto::hash>& tx_hashes);
   crypto::hash get_tx_tree_hash(const block& b);
   crypto::hash get_tx_tree_hash(const bb_block& b);
+
+  bool check_proof_of_work_v1(const block& bl, difficulty_type current_diffic, crypto::hash& proof_of_work);
+  bool check_proof_of_work_v2(const block& bl, difficulty_type current_diffic, crypto::hash& proof_of_work);
+  bool check_proof_of_work(const block& bl, difficulty_type current_diffic, crypto::hash& proof_of_work);
 
 #define CHECKED_GET_SPECIFIC_VARIANT(variant_var, specific_type, variable_name, fail_return_val) \
   CHECK_AND_ASSERT_MES(variant_var.type() == typeid(specific_type), fail_return_val, "wrong variant type: " << variant_var.type().name() << ", expected " << typeid(specific_type).name()); \

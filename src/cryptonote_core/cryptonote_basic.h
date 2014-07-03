@@ -6,6 +6,7 @@
 
 #include <boost/variant.hpp>
 #include <boost/functional/hash/hash.hpp>
+#include <iostream>
 #include <vector>
 #include <cstring>  // memcmp
 #include <sstream>
@@ -27,6 +28,13 @@
 
 namespace cryptonote
 {
+  struct block;
+  class transaction;
+  struct tx_extra_merge_mining_tag;
+
+  // Implemented in cryptonote_format_utils.cpp
+  bool get_transaction_hash(const transaction& t, crypto::hash& res);
+  bool get_mm_tag_from_extra(const std::vector<uint8_t>& tx, tx_extra_merge_mining_tag& mm_tag);
 
   const static crypto::hash null_hash = AUTO_VAL_INIT(null_hash);
   const static crypto::public_key null_pkey = AUTO_VAL_INIT(null_pkey);
@@ -346,34 +354,147 @@ namespace cryptonote
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
+
+  const uint8_t CURRENT_BYTECOIN_BLOCK_MAJOR_VERSION = 1;
+
+  struct bytecoin_block
+  {
+    uint8_t major_version;
+    uint8_t minor_version;
+    crypto::hash prev_id;
+    uint32_t nonce;
+    size_t number_of_transactions;
+    std::vector<crypto::hash> miner_tx_branch;
+    transaction miner_tx;
+    std::vector<crypto::hash> blockchain_branch;
+  };
+
+  struct serializable_bytecoin_block
+  {
+    bytecoin_block& b;
+    uint64_t& timestamp;
+    bool hashing_serialization;
+    bool header_only;
+
+    serializable_bytecoin_block(bytecoin_block& b_, uint64_t& timestamp_, bool hashing_serialization_, bool header_only_) :
+      b(b_), timestamp(timestamp_), hashing_serialization(hashing_serialization_), header_only(header_only_)
+    {
+    }
+
+    BEGIN_SERIALIZE_OBJECT()
+      VARINT_FIELD_N("major_version", b.major_version);
+      if(b.major_version > CURRENT_BYTECOIN_BLOCK_MAJOR_VERSION) return false;
+      VARINT_FIELD_N("minor_version", b.minor_version);
+      VARINT_FIELD(timestamp);
+      FIELD_N("prev_id", b.prev_id);
+      FIELD_N("nonce", b.nonce);
+
+      if (hashing_serialization)
+      {
+        crypto::hash miner_tx_hash;
+        if (!get_transaction_hash(b.miner_tx, miner_tx_hash))
+          return false;
+
+        crypto::hash merkle_root;
+        crypto::tree_hash_from_branch(b.miner_tx_branch.data(), b.miner_tx_branch.size(), miner_tx_hash, 0, merkle_root);
+
+        FIELD(merkle_root);
+      }
+
+      VARINT_FIELD_N("number_of_transactions", b.number_of_transactions);
+      if (b.number_of_transactions < 1)
+        return false;
+
+      if (!header_only)
+      {
+        ar.tag("miner_tx_branch");
+        ar.begin_array();
+        size_t branch_size = crypto::tree_depth(b.number_of_transactions);
+        PREPARE_CUSTOM_VECTOR_SERIALIZATION(branch_size, const_cast<bytecoin_block&>(b).miner_tx_branch);
+        if (b.miner_tx_branch.size() != branch_size)
+          return false;
+        for (size_t i = 0; i < branch_size; ++i)
+        {
+          FIELDS(b.miner_tx_branch[i]);
+          if (i + 1 < branch_size)
+            ar.delimit_array();
+        }
+        ar.end_array();
+
+        FIELD(b.miner_tx);
+
+        tx_extra_merge_mining_tag mm_tag;
+        if (!get_mm_tag_from_extra(b.miner_tx.extra, mm_tag))
+          return false;
+
+        ar.tag("blockchain_branch");
+        ar.begin_array();
+        PREPARE_CUSTOM_VECTOR_SERIALIZATION(mm_tag.depth, const_cast<bytecoin_block&>(b).blockchain_branch);
+        if (mm_tag.depth != b.blockchain_branch.size())
+          return false;
+        for (size_t i = 0; i < mm_tag.depth; ++i)
+        {
+          FIELDS(b.blockchain_branch[i]);
+          if (i + 1 < mm_tag.depth)
+            ar.delimit_array();
+        }
+        ar.end_array();
+      }
+    END_SERIALIZE()
+  };
+
+  // Implemented below
+  inline serializable_bytecoin_block make_serializable_bytecoin_block(const block& b, bool hashing_serialization, bool header_only);
+
   struct block_header
   {
     uint8_t major_version;
     uint8_t minor_version;
     uint64_t timestamp;
-    crypto::hash  prev_id;
+    crypto::hash prev_id;
     uint32_t nonce;
 
     BEGIN_SERIALIZE()
       VARINT_FIELD(major_version)
+      if(major_version > BLOCK_MAJOR_VERSION_2) return false;
       VARINT_FIELD(minor_version)
-      VARINT_FIELD(timestamp)
+      if (BLOCK_MAJOR_VERSION_1 == major_version)
+      {
+        VARINT_FIELD(timestamp)
+      }
       FIELD(prev_id)
-      FIELD(nonce)
+      if (BLOCK_MAJOR_VERSION_1 == major_version)
+      {
+        FIELD(nonce)
+      }
     END_SERIALIZE()
   };
 
   struct block: public block_header
   {
+    bytecoin_block parent_block;
+
     transaction miner_tx;
     std::vector<crypto::hash> tx_hashes;
 
     BEGIN_SERIALIZE_OBJECT()
       FIELDS(*static_cast<block_header *>(this))
+      if (BLOCK_MAJOR_VERSION_2 <= major_version)
+      {
+        auto sbb = make_serializable_bytecoin_block(*this, false, false);
+        FIELD_N("parent_block", sbb);
+      }
       FIELD(miner_tx)
       FIELD(tx_hashes)
     END_SERIALIZE()
   };
+
+  inline serializable_bytecoin_block make_serializable_bytecoin_block(const block& b, bool hashing_serialization, bool header_only)
+  {
+    block& block_ref = const_cast<block&>(b);
+    return serializable_bytecoin_block(block_ref.parent_block, block_ref.timestamp, hashing_serialization, header_only);
+  }
+
 
   struct bb_block_header
   {

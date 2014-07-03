@@ -11,6 +11,7 @@ using namespace epee;
 #include "miner.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
+#include "serialization/binary_utils.h"
 
 namespace cryptonote
 {
@@ -239,8 +240,7 @@ namespace cryptonote
   crypto::public_key get_tx_pub_key_from_extra(const std::vector<uint8_t>& tx_extra)
   {
     std::vector<tx_extra_field> tx_extra_fields;
-    if (!parse_tx_extra(tx_extra, tx_extra_fields))
-      return null_pkey;
+    parse_tx_extra(tx_extra, tx_extra_fields);
 
     tx_extra_pub_key pub_key_field;
     if(!find_tx_extra_field_by_type(tx_extra_fields, pub_key_field))
@@ -276,6 +276,26 @@ namespace cryptonote
     ++start_pos;
     memcpy(&tx_extra[start_pos], extra_nonce.data(), extra_nonce.size());
     return true;
+  }
+  //---------------------------------------------------------------
+  bool append_mm_tag_to_extra(std::vector<uint8_t>& tx_extra, const tx_extra_merge_mining_tag& mm_tag)
+  {
+    blobdata blob;
+    if (!t_serializable_object_to_blob(mm_tag, blob))
+      return false;
+
+    tx_extra.push_back(TX_EXTRA_MERGE_MINING_TAG);
+    std::copy(reinterpret_cast<const uint8_t*>(blob.data()), reinterpret_cast<const uint8_t*>(blob.data() + blob.size()), std::back_inserter(tx_extra));
+    return true;
+  }
+  //---------------------------------------------------------------
+  bool get_mm_tag_from_extra(const std::vector<uint8_t>& tx_extra, tx_extra_merge_mining_tag& mm_tag)
+  {
+    std::vector<tx_extra_field> tx_extra_fields;
+    if (!parse_tx_extra(tx_extra, tx_extra_fields))
+      return false;
+
+    return find_tx_extra_field_by_type(tx_extra_fields, mm_tag);
   }
   //---------------------------------------------------------------
   void set_payment_id_to_tx_extra_nonce(blobdata& extra_nonce, const crypto::hash& payment_id)
@@ -599,14 +619,22 @@ namespace cryptonote
     return get_object_hash(t, res, blob_size);
   }
   //---------------------------------------------------------------
-  blobdata get_block_hashing_blob(const block& b)
+  bool get_block_hashing_blob(const block& b, blobdata& blob)
   {
-    blobdata blob = t_serializable_object_to_blob(static_cast<block_header>(b));
+    blob = t_serializable_object_to_blob(static_cast<const block_header&>(b));
     crypto::hash tree_root_hash = get_tx_tree_hash(b);
-    blob.append((const char*)&tree_root_hash, sizeof(tree_root_hash ));
+    blob.append(reinterpret_cast<const char*>(&tree_root_hash), sizeof(tree_root_hash));
     blob.append(tools::get_varint_data(b.tx_hashes.size()+1));
-    return blob;
+
+    return true;
   }
+  //---------------------------------------------------------------
+  bool get_bytecoin_block_hashing_blob(const block& b, blobdata& blob)
+  {
+    auto sbb = make_serializable_bytecoin_block(b, true, true);
+    return t_serializable_object_to_blob(sbb, blob);
+  }
+
   blobdata get_block_hashing_blob(const bb_block& b)
   {
     blobdata blob = t_serializable_object_to_blob(static_cast<bb_block_header>(b));
@@ -618,7 +646,21 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool get_block_hash(const block& b, crypto::hash& res)
   {
-    return get_object_hash(get_block_hashing_blob(b), res);
+    blobdata blob;
+    if (!get_block_hashing_blob(b, blob))
+      return false;
+
+    if (BLOCK_MAJOR_VERSION_2 <= b.major_version)
+    {
+      blobdata parent_blob;
+      auto sbb = make_serializable_bytecoin_block(b, true, false);
+      if (!t_serializable_object_to_blob(sbb, parent_blob))
+        return false;
+
+      blob.append(parent_blob);
+    }
+
+    return get_object_hash(blob, res);
   }
   //---------------------------------------------------------------
   crypto::hash get_block_hash(const block& b)
@@ -626,6 +668,15 @@ namespace cryptonote
     crypto::hash p = null_hash;
     get_block_hash(b, p);
     return p;
+  }
+  //---------------------------------------------------------------
+  bool get_block_header_hash(const block& b, crypto::hash& res)
+  {
+    blobdata blob;
+    if (!get_block_hashing_blob(b, blob))
+      return false;
+
+    return get_object_hash(blob, res);
   }
   //---------------------------------------------------------------
   bool generate_genesis_block(block& bl)
@@ -655,10 +706,36 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
+  bool get_genesis_block_hash(crypto::hash& h)
+  {
+    static std::atomic<bool> cached(false);
+    static crypto::hash genesis_block_hash;
+    if (!cached)
+    {
+      static std::mutex m;
+      std::unique_lock<std::mutex> lock(m);
+      if (!cached)
+      {
+        block genesis_block;
+        if (!generate_genesis_block(genesis_block))
+          return false;
+
+        if (!get_block_hash(genesis_block, genesis_block_hash))
+          return false;
+
+        cached = true;
+      }
+    }
+
+    h = genesis_block_hash;
+    return true;
+  }
+  //---------------------------------------------------------------
   bool get_block_longhash(const block& b, crypto::hash& res, uint64_t height)
   {
-    block b_local = b; //workaround to avoid const errors with do_serialize
-    blobdata bd = get_block_hashing_blob(b);
+    blobdata bd;
+    if(!get_block_hashing_blob(b, bd))
+      return false;
     crypto::cn_slow_hash(bd.data(), bd.size(), res);
     return true;
   }
@@ -688,6 +765,15 @@ namespace cryptonote
     crypto::hash p = null_hash;
     get_block_longhash(b, p, height);
     return p;
+  }
+  //---------------------------------------------------------------
+  bool get_bytecoin_block_longhash(const block& b, crypto::hash& res)
+  {
+    blobdata bd;
+    if(!get_bytecoin_block_hashing_blob(b, bd))
+      return false;
+    crypto::cn_slow_hash(bd.data(), bd.size(), res);
+    return true;
   }
   //---------------------------------------------------------------
   bool parse_and_validate_block_from_blob(const blobdata& b_blob, block& b)
@@ -761,6 +847,62 @@ namespace cryptonote
     BOOST_FOREACH(auto& th, b.tx_hashes)
       txs_ids.push_back(th);
     return get_tx_tree_hash(txs_ids);
+  }
+  //---------------------------------------------------------------
+  bool check_proof_of_work_v1(const block& bl, difficulty_type current_diffic, crypto::hash& proof_of_work)
+  {
+    if (BLOCK_MAJOR_VERSION_1 != bl.major_version)
+      return false;
+
+    proof_of_work = get_block_longhash(bl, 0);
+    return check_hash(proof_of_work, current_diffic);
+  }
+  //---------------------------------------------------------------
+  bool check_proof_of_work_v2(const block& bl, difficulty_type current_diffic, crypto::hash& proof_of_work)
+  {
+    if (BLOCK_MAJOR_VERSION_2 != bl.major_version)
+      return false;
+
+    if (!get_bytecoin_block_longhash(bl, proof_of_work))
+      return false;
+    if (!check_hash(proof_of_work, current_diffic))
+      return false;
+
+    tx_extra_merge_mining_tag mm_tag;
+    if (!get_mm_tag_from_extra(bl.parent_block.miner_tx.extra, mm_tag))
+    {
+      LOG_ERROR("merge mining tag wasn't found in extra of the parent block miner transaction");
+      return false;
+    }
+
+    crypto::hash genesis_block_hash;
+    if (!get_genesis_block_hash(genesis_block_hash))
+      return false;
+
+    if (8 * sizeof(genesis_block_hash) < bl.parent_block.blockchain_branch.size())
+      return false;
+
+    crypto::hash aux_block_header_hash;
+    if (!get_block_header_hash(bl, aux_block_header_hash))
+      return false;
+
+    crypto::hash aux_blocks_merkle_root;
+    crypto::tree_hash_from_branch(bl.parent_block.blockchain_branch.data(), bl.parent_block.blockchain_branch.size(),
+      aux_block_header_hash, &genesis_block_hash, aux_blocks_merkle_root);
+    CHECK_AND_NO_ASSERT_MES(aux_blocks_merkle_root == mm_tag.merkle_root, false, "Aux block hash wasn't found in merkle tree");
+
+    return true;
+  }
+  //---------------------------------------------------------------
+  bool check_proof_of_work(const block& bl, difficulty_type current_diffic, crypto::hash& proof_of_work)
+  {
+    switch (bl.major_version)
+    {
+    case BLOCK_MAJOR_VERSION_1: return check_proof_of_work_v1(bl, current_diffic, proof_of_work);
+    case BLOCK_MAJOR_VERSION_2: return check_proof_of_work_v2(bl, current_diffic, proof_of_work);
+    }
+
+    CHECK_AND_ASSERT_MES(false, false, "unknown block major version: " << bl.major_version << "." << bl.minor_version);
   }
   //---------------------------------------------------------------
 }
