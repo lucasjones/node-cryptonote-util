@@ -1,3 +1,4 @@
+#include <cmath>
 #include <node.h>
 #include <node_buffer.h>
 #include <v8.h>
@@ -10,6 +11,7 @@
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include "common/base58.h"
+#include "serialization/binary_utils.h"
 
 using namespace node;
 using namespace v8;
@@ -94,17 +96,20 @@ Handle<Value> address_decode(const Arguments& args) {
         return except("Argument should be a buffer object.");
 
     blobdata input = std::string(Buffer::Data(target), Buffer::Length(target));
-    blobdata output = "";
 
+    blobdata data;
     uint64_t prefix;
+    if (!tools::base58::decode_addr(input, prefix, data))
+        return scope.Close(Undefined());
 
-    tools::base58::decode_addr(input, prefix, output);
-    
-    if(output.length())
-        output = uint64be_to_blob(prefix) + output;
+    account_public_address adr;
+    if (!::serialization::parse_binary(data, adr))
+        return scope.Close(Undefined());
 
-    Buffer* buff = Buffer::New(output.data(), output.size());
-    return scope.Close(buff->handle_);
+    if (!crypto::check_key(adr.m_spend_public_key) || !crypto::check_key(adr.m_view_public_key))
+        return scope.Close(Undefined());
+
+    return scope.Close(Integer::New(static_cast<uint32_t>(prefix)));
 }
 
 void init(Handle<Object> exports) {
