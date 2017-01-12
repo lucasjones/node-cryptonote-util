@@ -74,6 +74,7 @@ namespace cryptonote
   crypto::hash get_transaction_hash(const transaction& t);
   bool get_transaction_hash(const transaction& t, crypto::hash& res);
   bool get_transaction_hash(const transaction& t, crypto::hash& res, size_t& blob_size);
+  bool get_transaction_hash(const transaction& t, crypto::hash& res, size_t* blob_size);
   blobdata get_block_hashing_blob(const block& b);
   blobdata get_block_hashing_blob(const bb_block& b);
   bool get_block_hash(const block& b, crypto::hash& res);
